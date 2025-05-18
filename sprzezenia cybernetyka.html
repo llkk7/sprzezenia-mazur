@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <title>Spirala sprzężeń – Symulator cybernetyczny</title>
+  <style>
+    body { background: #181818; color: #eee; font-family: 'Segoe UI', sans-serif; }
+    h1 { color: #e9ffad; }
+    .controls, .advanced { background: #232323; border-radius: 14px; padding: 1.2em 2em; margin: 2em 0 1em 0;}
+    label { font-weight: bold; color: #fff8; margin-right: 1em;}
+    input[type="range"], input[type="number"] { vertical-align: middle; }
+    input[type="number"] { width: 64px; font-size: 1em; margin-left: 0.5em; background:#111; color:#fff; border-radius: 4px; border: 1px solid #555; }
+    .results { margin-top: 1.7em; }
+    .wynik { font-size: 1.15em; color: #fff; margin-top: 1.1em; }
+    svg { background: #23292b; border-radius: 8px; box-shadow: 0 2px 16px #0006; margin-top: 1.2em;}
+    .legend { color: #ff9; font-size: 0.9em; margin-bottom: 4px; }
+    .opis { color: #fffa; font-size: 0.98em; margin-bottom: 1.5em; }
+    .param-val { display: inline-block; width: 34px; color: #f0ffbe; }
+    .footer { color: #888; margin-top: 3em; font-size: 0.88em; }
+    .btn { background: #2f4a1a; color: #eef9e5; border: none; border-radius: 6px; padding: 0.6em 1.6em; font-size: 1.1em; cursor: pointer; margin-left: 2em;}
+    .btn:hover { background: #4c692b; }
+    select { font-size: 1em; padding: 0.25em 0.5em; margin-left: 2em; background:#191919; color:#ffe;}
+    .advanced { margin-top: 0.5em; }
+    .tabela-krokow { background: #232323; border-radius: 10px; padding: 1em; margin: 1.7em 0 0.5em 0; font-size: 0.97em; max-height: 260px; overflow-y: auto;}
+    table { border-collapse: collapse; width: 99%; }
+    th, td { border: 1px solid #444; padding: 0.3em 0.65em; }
+    th { background: #192013; color: #d9fca5;}
+    .critical { background: #e22; color: #fff; font-weight: bold;}
+    .inline { display: inline-block; margin-right: 1.1em;}
+    .math { color: #ffe985; margin-top: 0.7em; font-family: "Fira Mono", monospace; font-size: 1.09em;}
+    .sol-container { background:#232323; border-radius:10px; margin:1.2em 0 1.2em 0; padding:1.1em 1.1em 1.2em 1.1em; font-size:1.03em; color:#fbefc1;}
+    .sol-header { font-size:1.06em; color:#d7ffb6; margin-bottom:0.7em; font-weight:bold;}
+    .sol-step { margin-bottom:0.3em;}
+    .sol-var { color:#84ffc9; }
+    .sol-num { color:#ffd4a7; }
+    .sol-fml { color:#ffd479; }
+    .togglemath { background: #3a3a11; color: #f5ffca; border: none; border-radius: 5px; padding: 0.32em 1.1em; font-size: 1em; cursor: pointer; margin-left: 1em;}
+    .togglemath:hover { background: #53531b; }
+    ::-webkit-scrollbar { background: #181818; width: 9px; }
+    ::-webkit-scrollbar-thumb { background: #393939; border-radius: 6px; }
+    .hide { display:none; }
+  </style>
+</head>
+<body>
+  <h1>Spirala sprzężeń<br><span style="font-size:0.7em;font-weight:normal;">Symulator cybernetyczny</span></h1>
+  <div class="opis">
+    Wybierz tryb sprzężenia: <b>Równoległy</b> lub <b>Sekwencyjny</b>.<br>
+    Ustaw <b>reaktywność</b> (rx, ry), liczbę kroków, wartości początkowe.<br>
+    <i>Próg krytyczny</i>: jeśli wartość reakcji przekroczy tę wartość (absolutnie), pojawi się komunikat o rozpadzie systemu.<br>
+    <b>Matematyczne rozwiązanie</b> pojawi się po kliknięciu przycisku.
+  </div>
+  <div class="controls">
+    <label for="trybMat">Tryb sprzężenia:</label>
+    <select id="trybMat" onchange="zmienTryb();symuluj();">
+      <option value="parallel">Równoległy</option>
+      <option value="sequential">Sekwencyjny</option>
+    </select>
+
+    <label for="rx" style="margin-left:2em;">rx:</label>
+    <input type="range" id="rx" min="-2" max="2" value="1" step="0.01" oninput="updateRxVal(this.value)">
+    <input type="number" id="rxNum" min="-2" max="2" value="1" step="0.01" oninput="updateRxRange(this.value)">
+    <span class="param-val" id="rxVal">1</span>
+
+    <label for="ry" style="margin-left:2em;">ry:</label>
+    <input type="range" id="ry" min="-2" max="2" value="1" step="0.01" oninput="updateRyVal(this.value)">
+    <input type="number" id="ryNum" min="-2" max="2" value="1" step="0.01" oninput="updateRyRange(this.value)">
+    <span class="param-val" id="ryVal">1</span>
+
+    <button class="btn" onclick="symuluj()">Symuluj</button>
+    <select id="trybWykresu" onchange="symuluj()">
+      <option value="naprzemienny">Zygzak (RA↔RB naprzemiennie)</option>
+      <option value="osobne">Osobne linie: RA i RB</option>
+      <option value="punkty">Punkty: RA i RB</option>
+    </select>
+    <button class="togglemath" onclick="toggleRozw()">Pokaż rozwiązanie matematyczne</button>
+  </div>
+
+  <div class="advanced">
+    <span class="inline" id="nStepsSpan">
+      Liczba kroków:
+      <input type="number" id="nSteps" value="30" min="5" max="200" style="width:60px;" onchange="symuluj()">
+    </span>
+    <span class="inline" id="ra0Span">
+      RA(0):
+      <input type="number" id="ra0" value="1" step="0.01" style="width:55px;" onchange="symuluj()">
+    </span>
+    <span class="inline" id="rb0Span">
+      RB(0):
+      <input type="number" id="rb0" value="1" step="0.01" style="width:55px;" onchange="symuluj()">
+    </span>
+    <span class="inline">
+      Próg krytyczny:
+      <input type="number" id="progKryt" value="10" step="0.1" min="1" style="width:70px;" onchange="symuluj()">
+    </span>
+  </div>
+
+  <div class="legend">
+    <span style="color:#00c2ff;">● System A (RA)</span> &nbsp;&nbsp; 
+    <span style="color:#ff8f45;">● System B (RB)</span>
+  </div>
+  <svg id="wykres" width="650" height="280"></svg>
+
+  <div class="results">
+    <div id="wyniki"></div>
+    <div class="wynik" id="analiza"></div>
+    <div class="math" id="wzoryMath"></div>
+    <div class="tabela-krokow" id="tabelaKrokow"></div>
+    <div id="rozwiazanieMath" style="display:none;"></div>
+  </div>
+
+  <div class="footer">
+    Powered by <b>twoja stara</b>
+  </div>
+  <script>
+    // Synchronizacja suwak <-> input number
+    function updateRxVal(v) {
+      document.getElementById('rxVal').textContent = v;
+      document.getElementById('rxNum').value = v;
+      symuluj();
+    }
+    function updateRxRange(v) {
+      document.getElementById('rxVal').textContent = v;
+      document.getElementById('rx').value = v;
+      symuluj();
+    }
+    function updateRyVal(v) {
+      document.getElementById('ryVal').textContent = v;
+      document.getElementById('ryNum').value = v;
+      symuluj();
+    }
+    function updateRyRange(v) {
+      document.getElementById('ryVal').textContent = v;
+      document.getElementById('ry').value = v;
+      symuluj();
+    }
+    function zmienTryb() {
+      var tryb = document.getElementById('trybMat').value;
+      if (tryb === "parallel") {
+        document.getElementById('ra0Span').classList.remove("hide");
+        document.getElementById('rb0Span').classList.remove("hide");
+        document.getElementById('ra0').disabled = false;
+        document.getElementById('rb0').disabled = false;
+      } else {
+        document.getElementById('ra0Span').classList.add("hide");
+        document.getElementById('rb0Span').classList.remove("hide");
+        document.getElementById('ra0').disabled = true;
+        document.getElementById('rb0').disabled = false;
+      }
+    }
+
+    // Global do rozwiązania
+    let globalRA = [], globalRB = [], global_rx, global_ry, global_nSteps, global_trybMat;
+
+    function symuluj() {
+      let rx = parseFloat(document.getElementById('rx').value);
+      let ry = parseFloat(document.getElementById('ry').value);
+      let tryb = document.getElementById('trybWykresu').value;
+      let nSteps = parseInt(document.getElementById('nSteps').value);
+      let trybMat = document.getElementById('trybMat').value;
+      let RA = [], RB = [];
+      let przekroczonoProg = false;
+      let progKryt = parseFloat(document.getElementById('progKryt').value);
+      let progKrok = null, progVal = null, progSystem = null;
+      let RA0 = parseFloat(document.getElementById('ra0').value);
+      let RB0 = parseFloat(document.getElementById('rb0').value);
+
+      // Tryb: równoległy
+      if (trybMat === "parallel") {
+        RA[0] = RA0;
+        RB[0] = RB0;
+        for (let i = 1; i < nSteps; i++) {
+          RA[i] = RB[i-1] * rx;
+          RB[i] = RA[i-1] * ry;
+          if (!przekroczonoProg && (Math.abs(RA[i]) > progKryt || Math.abs(RB[i]) > progKryt)) {
+            przekroczonoProg = true;
+            progKrok = i;
+            progVal = Math.abs(RA[i]) > progKryt ? RA[i] : RB[i];
+            progSystem = Math.abs(RA[i]) > progKryt ? "RA" : "RB";
+          }
+        }
+      } else { // sekwencyjny
+        RB[0] = RB0;
+        for (let i = 1; i < nSteps; i++) {
+          RA[i] = RB[i-1] * rx;
+          RB[i] = RA[i] * ry;
+          if (!przekroczonoProg && (Math.abs(RA[i]) > progKryt || Math.abs(RB[i]) > progKryt)) {
+            przekroczonoProg = true;
+            progKrok = i;
+            progVal = Math.abs(RA[i]) > progKryt ? RA[i] : RB[i];
+            progSystem = Math.abs(RA[i]) > progKryt ? "RA" : "RB";
+          }
+        }
+        // RA[0] jest "pusta" – uzupełnij None/--/brak
+        RA[0] = "---";
+      }
+
+      // Zapamiętaj do rozpiski
+      globalRA = RA.slice();
+      globalRB = RB.slice();
+      global_rx = rx;
+      global_ry = ry;
+      global_nSteps = nSteps;
+      global_trybMat = trybMat;
+
+      let r_iloczyn = rx * ry;
+
+      // --- Wykres SVG ---
+      const svg = document.getElementById('wykres');
+      svg.innerHTML = "";
+      let minY = Math.min(...RA.filter(x=>x!=="---"), ...RB.filter(x=>x!=="---"), 0);
+      let maxY = Math.max(...RA.filter(x=>x!=="---"), ...RB.filter(x=>x!=="---"), 0);
+      let absMax = Math.max(Math.abs(minY), Math.abs(maxY), 1);
+      let offsetY = 140, scaleY = 110 / absMax; 
+      let scaleX = 560 / (nSteps-1);
+      svg.innerHTML += `<line x1="40" y1="${offsetY}" x2="600" y2="${offsetY}" stroke="#666" stroke-width="2"/>`;
+      svg.innerHTML += `<line x1="40" y1="${offsetY-110}" x2="40" y2="${offsetY+110}" stroke="#666" stroke-width="2"/>`;
+
+      // Rysowanie wykresów
+      if(tryb === "naprzemienny") {
+        let points = [];
+        for(let i=0;i<nSteps;i++) {
+          if (RA[i]!=="---") points.push(`${40+i*scaleX},${offsetY-RA[i]*scaleY}`);
+          if (RB[i]!=="---") points.push(`${40+i*scaleX},${offsetY-RB[i]*scaleY}`);
+        }
+        svg.innerHTML += `<polyline points="${points.join(' ')}" fill="none" stroke="#11d3ff" stroke-width="2.5"/>`;
+        for (let i = 0; i < nSteps; i += Math.ceil(nSteps/20)) {
+          if (RA[i]!=="---") svg.innerHTML += `<circle cx="${40 + i*scaleX}" cy="${offsetY - RA[i]*scaleY}" r="3" fill="#00c2ff"><title>Krok: ${i}, RA: ${RA[i]==="---"?"---":RA[i].toFixed(3)}</title></circle>`;
+          if (RB[i]!=="---") svg.innerHTML += `<circle cx="${40 + i*scaleX}" cy="${offsetY - RB[i]*scaleY}" r="3" fill="#ff8f45"><title>Krok: ${i}, RB: ${RB[i]==="---"?"---":RB[i].toFixed(3)}</title></circle>`;
+        }
+      }
+      else if(tryb === "osobne") {
+        let ptsA = RA.map((v,i) => (v==="---") ? "" : `${40 + i*scaleX},${offsetY - v*scaleY}`).join(" ");
+        svg.innerHTML += `<polyline points="${ptsA}" fill="none" stroke="#00c2ff" stroke-width="2.5"/>`;
+        let ptsB = RB.map((v,i) => (v==="---") ? "" : `${40 + i*scaleX},${offsetY - v*scaleY}`).join(" ");
+        svg.innerHTML += `<polyline points="${ptsB}" fill="none" stroke="#ff8f45" stroke-width="2.5"/>`;
+        for (let i = 0; i < nSteps; i += Math.ceil(nSteps/20)) {
+          if (RA[i]!=="---") svg.innerHTML += `<circle cx="${40 + i*scaleX}" cy="${offsetY - RA[i]*scaleY}" r="3" fill="#00c2ff"><title>Krok: ${i}, RA: ${RA[i]==="---"?"---":RA[i].toFixed(3)}</title></circle>`;
+          if (RB[i]!=="---") svg.innerHTML += `<circle cx="${40 + i*scaleX}" cy="${offsetY - RB[i]*scaleY}" r="3" fill="#ff8f45"><title>Krok: ${i}, RB: ${RB[i]==="---"?"---":RB[i].toFixed(3)}</title></circle>`;
+        }
+      }
+      else if(tryb === "punkty") {
+        for (let i = 0; i < nSteps; i++) {
+          if (RA[i]!=="---") svg.innerHTML += `<circle cx="${40 + i*scaleX}" cy="${offsetY - RA[i]*scaleY}" r="3" fill="#00c2ff"><title>Krok: ${i}, RA: ${RA[i]==="---"?"---":RA[i].toFixed(3)}</title></circle>`;
+          if (RB[i]!=="---") svg.innerHTML += `<circle cx="${40 + i*scaleX}" cy="${offsetY - RB[i]*scaleY}" r="3" fill="#ff8f45"><title>Krok: ${i}, RB: ${RB[i]==="---"?"---":RB[i].toFixed(3)}</title></circle>`;
+        }
+      }
+
+      // --- Wyniki liczbowe: tabela wartości pełna ---
+      let tK = "<b>Tabela wszystkich kroków:</b><br>";
+      tK += "<table><tr><th>Krok</th><th>RA</th><th>RB</th></tr>";
+      for (let i=0; i<nSteps; i++) {
+        let rowClass = "";
+        if (progKrok !== null && i >= progKrok) rowClass = ' class="critical"';
+        tK += `<tr${rowClass}><td>${i}</td><td>${RA[i]==="---"?"---":RA[i].toFixed(4)}</td><td>${RB[i]==="---"?"---":RB[i].toFixed(4)}</td></tr>`;
+      }
+      tK += "</table>";
+      document.getElementById('tabelaKrokow').innerHTML = tK;
+
+      // --- Analiza słowna zawsze się wyświetla ---
+      let analiza = "";
+      if (rx === 0 || ry === 0) {
+        analiza = "Jeden z parametrów wynosi zero. Brak sprzężenia – reakcje natychmiast zanikają.";
+      } 
+      else if (przekroczonoProg) {
+        analiza = `<span class="critical">⚠️ Próg krytyczny (${progKryt}) przekroczony przez ${progSystem} w kroku ${progKrok} (wartość: ${progVal.toFixed(3)}). System się rozpada!</span><br>`;
+      }
+      if (rx !== 0 && ry !== 0) {
+        let r_iloczyn = rx*ry;
+        analiza += `<br>Iloczyn rx·ry = <b>${r_iloczyn.toFixed(3)}</b>. `;
+        if (r_iloczyn > 1.02 || r_iloczyn < -1.02) {
+          analiza += "Układ rozbieżny (reakcje narastają).";
+        } else if (r_iloczyn >= 0.98 && r_iloczyn <= 1.02) {
+          analiza += "Układ prawie stabilny (reakcje oscylują wokół stałej).";
+        } else if (r_iloczyn > 0 && r_iloczyn < 0.98) {
+          analiza += "Układ zbieżny (reakcje wygaszają się).";
+        } else if (r_iloczyn < 0 && r_iloczyn > -1.02) {
+          analiza += "Oscylacje tłumione (ujemne sprzężenie).";
+        } else if (r_iloczyn <= -1.02) {
+          analiza += "Oscylacje rozbieżne (ujemne sprzężenie z narastaniem).";
+        }
+      }
+      document.getElementById('analiza').innerHTML = analiza;
+
+      // Wzory
+      let fml = '';
+      if (trybMat === "parallel") {
+        fml = "<b>Wzory równoległe:</b><br>RA[n] = RB[n-1] × rx &nbsp;&nbsp;&nbsp; RB[n] = RA[n-1] × ry";
+      } else {
+        fml = "<b>Wzory sekwencyjne:</b><br>RA[n] = RB[n-1] × rx<br>RB[n] = RA[n] × ry";
+      }
+      document.getElementById('wzoryMath').innerHTML = fml;
+    }
+
+    function toggleRozw() {
+      let el = document.getElementById('rozwiazanieMath');
+      if (el.style.display === 'none' || el.style.display === '') {
+        el.innerHTML = rozwiazanieMathStr();
+        el.style.display = 'block';
+      } else {
+        el.style.display = 'none';
+      }
+    }
+
+function rozwiazanieMathStr() {
+  let RA = globalRA, RB = globalRB, rx = global_rx, ry = global_ry, N = global_nSteps, trybMat = global_trybMat;
+  let s = `<div class="sol-container"><div class="sol-header">Matematyczne rozwiązanie (krok po kroku):</div>`;
+
+  // Przygotuj tabelę HTML
+  s += `<table style="font-family:'Fira Mono',monospace;font-size:1.04em;color:#ffe985;width:99%;background:#232323;border-radius:8px;">
+  <tr>
+    <th>n</th>
+    <th>RA[n] – obliczenia</th>
+    <th>RA[n]</th>
+    <th>RB[n] – obliczenia</th>
+    <th>RB[n]</th>
+  </tr>`;
+
+  if (trybMat === "parallel") {
+    s += `<tr>
+      <td>0</td>
+      <td style="color:#666" colspan="2">RA[0] = ${RA[0]}</td>
+      <td style="color:#666" colspan="2">RB[0] = ${RB[0]}</td>
+    </tr>`;
+    for (let i = 1; i < N; i++) {
+      s += `<tr>
+        <td>${i}</td>
+        <td>RB[${i-1}]*${rx} = ${(RB[i-1]!=="---"?RB[i-1].toFixed(4):"---")}*${rx}</td>
+        <td>${(RA[i]!=="---"?RA[i].toFixed(4):"---")}</td>
+        <td>RA[${i-1}]*${ry} = ${(RA[i-1]!=="---"?RA[i-1].toFixed(4):"---")}*${ry}</td>
+        <td>${(RB[i]!=="---"?RB[i].toFixed(4):"---")}</td>
+      </tr>`;
+    }
+  } else {
+    // sekwencyjny (Mazur z podręcznika!)
+    s += `<tr>
+      <td>0</td>
+      <td style="color:#666" colspan="2"></td>
+      <td style="color:#666" colspan="2">RB[0] = ${RB[0]}</td>
+    </tr>`;
+    for (let i = 1; i < N; i++) {
+      s += `<tr>
+        <td>${i}</td>
+        <td>RB[${i-1}]*${rx} = ${(RB[i-1]!=="---"?RB[i-1].toFixed(4):"---")}*${rx}</td>
+        <td>${(RA[i]!=="---"?RA[i].toFixed(4):"---")}</td>
+        <td>RA[${i}]*${ry} = ${(RA[i]!=="---"?RA[i].toFixed(4):"---")}*${ry}</td>
+        <td>${(RB[i]!=="---"?RB[i].toFixed(4):"---")}</td>
+      </tr>`;
+    }
+  }
+  s += "</table></div>";
+  return s;
+}
+    // Init on load
+    document.getElementById('rxVal').textContent = document.getElementById('rx').value;
+    document.getElementById('rxNum').value = document.getElementById('rx').value;
+    document.getElementById('ryVal').textContent = document.getElementById('ry').value;
+    document.getElementById('ryNum').value = document.getElementById('ry').value;
+    zmienTryb();
+    symuluj();
+  </script>
+</body>
+</html>
